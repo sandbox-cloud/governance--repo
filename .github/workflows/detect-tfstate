@@ -1,0 +1,59 @@
+name: Block tfstate files (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      protected_paths:
+        description: 'Regex pattern of forbidden file paths'
+        required: false
+        type: string
+        default: '\.tfstate$|\.tfstate\.backup$'
+      allowed_paths:
+        description: 'Comma-separated list of allowed exceptions (e.g., test/fake.tfstate)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  block-tfstate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Check for disallowed files (enhanced)
+        id: check
+        run: |
+          echo "::group::Detecting Disallowed Files"
+          set -euo pipefail
+
+          # Gather tracked and untracked files
+          FILES=$(git ls-files --cached --others --exclude-standard)
+          echo "Total candidate files:"
+          echo "$FILES"
+          echo ""
+
+          # Convert allowed_paths into grep pattern
+          ALLOWED_PATTERN=$(echo "${{ inputs.allowed_paths }}" | sed 's/,/|/g')
+
+          # Filter matching disallowed files
+          MATCHING_FILES=$(echo "$FILES" | grep -E "${{ inputs.protected_paths }}" || true)
+
+          # Remove any allowed exceptions
+          if [[ -n "$ALLOWED_PATTERN" && -n "$MATCHING_FILES" ]]; then
+            MATCHING_FILES=$(echo "$MATCHING_FILES" | grep -Ev "$ALLOWED_PATTERN" || true)
+          fi
+
+          COUNT=$(echo "$MATCHING_FILES" | grep -E '\S' | wc -l || echo "0")
+
+          if [[ "$COUNT" -gt 0 ]]; then
+            echo "Found $COUNT disallowed file(s):"
+            echo "$MATCHING_FILES"
+            echo "::endgroup::"
+            echo "::error::Disallowed files detected: $COUNT match(es)"
+            exit 1
+          else
+            echo "No disallowed files found. All good!"
+            echo "::endgroup::"
+          fi
