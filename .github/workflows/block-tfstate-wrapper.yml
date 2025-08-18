@@ -1,0 +1,13 @@
+name: Block tfstate commits
+
+on:
+  pull_request:
+    paths:
+      - '**/*.tfstate'
+      - '**/*.tfstate.backup'
+
+jobs:
+  check-tfstate:
+    uses: ./.github/workflows/block-tfstate.yml
+    with:
+      protected_paths: '\.tfstate$|\.tfstate\.backup$'
